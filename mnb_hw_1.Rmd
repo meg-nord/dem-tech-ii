@@ -1,0 +1,142 @@
+---
+title: "Dem Tech II Hw 1"
+author: "Meghann Norden-Bright"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r}
+#load libraries
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(viridis)
+``` 
+
+```{r}
+#set directory
+setwd("/Users/norden-bright/Documents/Documents/Wisconsin/fall_2025/dem_tech_2")
+
+#read in data
+df <- read_csv("ps1_data_F2023.csv")
+```
+
+## Question 1
+
+```{r}
+#constructing life table
+
+lt <- df %>%
+  mutate(
+  n = lead(x) - x,  #create n variable
+  nmx = nDx / nNx, #here assuming that age-specific death rates are reproduced in this cohort (nmx = nMx)
+  nqx = (n * nmx)/(1 + (n-nax)*nmx), #Greville formula
+  nqx = if_else(row_number() == n(), 1, nqx), #open-ended interval = 1
+  npx = 1-nqx,
+  lx  = 100000 * cumprod(lag(npx, default = 1)), #note to self - cumprod works by multiplying radix by p0, then p0 and p1, etc. 
+  ndx = lx - lead(lx, default = 0),
+  nLx = (n*lead(lx, default = 0)) + (nax * ndx),
+  nLx = if_else(row_number() == n(), lx/nmx, nLx), #open-ended interval
+  Tx = rev(cumsum(rev(nLx))),
+  ex = Tx/lx
+  )
+```
+
+
+```{r}
+#graph lx
+
+ggplot(lt, aes(x = x, y = lx)) +
+  geom_step(direction = "hv", linewidth = 0.8, na.rm = TRUE) +
+  labs(x = "Age (x)", y = expression(l[x]), title = "French males 1985 survivors (lx)") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "grey90"))
+```
+```{r}
+#graph ndx
+
+ggplot(lt) +
+  geom_rect(aes(xmin = x, xmax = x + n, ymin = 0, ymax = ndx, fill = ndx)) +
+  labs(x = "Age (x)", y = expression(n*d[x]),
+       title = "French males 1985 deaths (ndx)") +
+  scale_fill_viridis_c(name = expression(n*d[x])) +
+  geom_point(data = filter(lt, is.na(n)), aes(x = x, y = ndx)) #open-ended interval - plotted as point because no n
+
+```
+```{r}
+#graph nmx
+
+ggplot(lt, aes(x = x, y = nmx)) +
+  geom_step(direction = "hv", linewidth = 0.8, na.rm = TRUE) +
+  labs(x = "Age (x)", y = expression(nmx), title = "French males 1985 mortality (nmx)") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "grey90"))
+```
+
+b. These graphs all provide insight into some trends in the population of French males in 1985. We can observe infant mortality in the early drop in survivorship (lx), and the elevated mortality rate and deaths in the interval 0-1. We can also observe a period of low mortality and deaths, what we might call the "quiescent" phase, until around age 20. Mortality rates and deaths increase with age as we expect. 
+
+c.
+```{r}
+e40 <- lt %>% filter(near(x, 40)) %>% pull(ex)
+cat(sprintf("e40 = %.2f years\n", e40))
+```
+Life expectancy at 40 was about 34.12. This means that French males who reached their 40th birthday could expect to live approximately 34 years on average. 
+
+d. 
+```{r}
+p_0_30 <- with(lt, lx[x == 30] / lx[x == 0])
+cat(sprintf("p_0_30 = %.2f", p_0_30))
+```
+The probability of surviving from birth to  age 30 is lx(30)/lx(0), or .97, or 97%. 
+
+e. 
+```{r}
+p_30_65 <- with(lt, lx[x == 65] / lx[x == 30])
+cat(sprintf("p_30_65 = %.2f", p_30_65))
+```
+The probability of surviving to age 65 given survival to age 30 is lx(65)/lx(30), or .75, or 75%.
+
+f. 
+```{r}
+p_50_55_from_birth <- with(lt, ndx[x==50] / lx[x==0])
+cat(sprintf("p_50_55_from_birth = %.2f", p_50_55_from_birth))
+```
+The probability that a newborn would die between 50 and 55 is ndx(50)/lx(0), or .04, or 4%. 
+
+g.
+```{r}
+p_yrs_15_65 <- with(lt, (Tx[x==15] - Tx[x==65]) / lx[x==0])
+cat(sprintf("p_yrs_15_65 = %.2f", p_yrs_15_65))
+```
+A newborn could expect to live about 45.92 years in the interval 15-65.
+
+h. We can make some conclusions about mortality from the value of nax in the 0-1 age group. The more concentrated infant deaths are towards the beginning of this age group, the lower the mortality, generally speaking. The value in this lifetable of 0.087 for the 0-1 interval tells us that this is a relatively low mortality population.
+
+i.
+```{r}
+cdr <- with(lt, 1 / ex[x==0])
+cat(sprintf("cdr = %.4f", cdr))
+```
+If the French population were stationary, the CDR would be about 0.014.
+
+## Question 2
+
+One area I'm interested in is the relationship between migration and political participation. Life tables would not be an appropriate tool for measuring political participation -- this is not a "state" one enters into or leaves, but rather should be measured in a way which accounts for more nuances. Migration, however, is much better suited to life table. 
+
+a. We can measure migration in a life table a few ways - the traditional way to my understanding means keeping the life table as focused on births/deaths, and computing differences between expected population and actual population as migration. However, an "event" could also be used to mean migration more directly, for example - births would be in-migration into a country/state, and deaths would be out-migration or death as an exit from the state.
+
+b. A lifetable could help us understand the age distribution of migration, or the typical amount of time an immigrant spends in the place they migrated to, for example. 
+
+c. In the US, the Census Bureau would be the first place I would look for migration estimates to estimate the size of the population at risk, especially for internal migration, although these estimates are often not that comprehensive. Internationally, countries with register data have more fine-grained individual-level data on immigrant population at risk, death rates among immigrants, and out-migration.
+
+d. In general, migration data is hard to validate-- lots of migration is not captured in official records. My estimates would likely be undercounts. The biggest problem here is that there is variation in which migratory patterns are captured by official records and which are not -- for example, individuals with lower socioeconomic status or migrating to seek asylum will be less likely to show up in data than those immigrating for high status job opportunities.
+
+
