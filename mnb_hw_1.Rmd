@@ -127,6 +127,8 @@ cat(sprintf("cdr = %.4f", cdr))
 ```
 If the French population were stationary, the CDR would be about 0.014.
 
+j. https://github.com/meg-nord/dem-tech-ii
+
 ## Question 2
 
 One area I'm interested in is the relationship between migration and political participation. Life tables would not be an appropriate tool for measuring political participation -- this is not a "state" one enters into or leaves, but rather should be measured in a way which accounts for more nuances. Migration, however, is much better suited to life table. 
