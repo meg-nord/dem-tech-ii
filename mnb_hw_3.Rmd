@@ -1,0 +1,144 @@
+---
+title: "Dem Tech II - Homework 3"
+author: "Meghann Norden-Bright"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r}
+#load libraries
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(viridis)
+library(HMDHFDplus)
+library(stringr)
+library(gt)
+``` 
+
+
+```{r}
+#obtain HMD 2005 single-year age-specific death rates (from life table) - commented out because bug
+
+#hmd_2005 <- readHMDweb("USA", "bltper_1x1", 'nordenbright@wisc.edu', 'DemTech2!', fixup = TRUE) %>% 
+  #filter(Year == '2005')
+
+#set directory
+setwd("/Users/norden-bright/Documents/Documents/Wisconsin/fall_2025/dem_tech_2")
+
+#read in data
+hmd_2005 <- read_csv("bltper_1x1.csv") %>%
+  filter(Year == '2005')
+```
+
+
+```{r}
+#build life table
+hmd_2005 <- hmd_2005 %>% 
+  mutate(
+    nqx_ca = pmax(0, 0.062 - 0.000053*(as.numeric(Age)^2))) %>% #from worksheet - make 0 when becomes negative
+  mutate(
+    nqx_all = nqx_ca + qx) %>% #add nqxs to get overall nqx
+  mutate(
+    lx_all = 100000 * cumprod(lag((1-nqx_all), default = 1)) #calculate overall lx
+  ) %>% 
+  mutate(
+    ndx_ca = nqx_ca * lx_all) %>%  #calculate car accident ndx
+  mutate(
+    ndx_d = qx * lx_all #calculate death ndx
+  )
+```
+
+```{r ztable-gt, echo=FALSE, message=FALSE}
+hmd_2005 %>%
+  select(Age, qx, nqx_ca, nqx_all, lx_all, ndx_ca, ndx_d) %>%
+  gt() %>%
+  tab_header(
+    title = "Multidecrement Life Table",
+    subtitle = "Death vs. Car Accident"
+  ) %>%
+  fmt_number(
+    columns = c(qx, nqx_ca, nqx_all),
+    decimals = 5
+  ) %>%
+  fmt_number(
+    columns = c(lx_all, ndx_ca, ndx_d),
+    decimals = 0,
+    use_seps = TRUE
+  ) %>%
+  cols_label(
+    Age = "Age",
+    qx = "nqx (Death)",
+    nqx_ca = "nqx (Car Accident)",
+    nqx_all = "nqx (All Causes)",
+    lx_all = "lx (All Causes)",
+    ndx_ca = "ndx (Car Accident)",
+    ndx_d = "ndx (Death)"
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    data_row.padding = px(3)
+  )
+
+
+```
+
+
+## A. What proportion of Wisconsinites who live to age 16 will live to age 31 without experiencing a motor vehicle accident?
+
+Equation: l(31) / l(16)  
+
+
+```{r}
+p_16_31 <- with(hmd_2005, lx_all[Age == 31] / lx_all[Age == 16])
+cat(sprintf("p_16_31 = %.4f", p_16_31))
+
+```
+
+59.57%
+
+## B. Among those who live to age 25 accident-free, what is the probability of experiencing an accident by age 31?
+
+Equation: 6d25(accident) / l(25) 
+
+```{r}
+num <- hmd_2005 %>% 
+  filter(Age >= 25, Age < 31) %>%
+  summarise(total = sum(ndx_ca, na.rm = TRUE))
+p_25_31 <- with(hmd_2005, num/ lx_all[Age == 25])
+cat(sprintf("p_25_31 = %.4f", p_25_31))
+```
+
+
+
+## C. Among those who survive to age 16, what is the probability of dying without experiencing an accident by age 31?
+
+Equation: 15d16(death) / l(16)
+
+```{r}
+num1 <- hmd_2005 %>% 
+  filter(Age >= 16, Age < 31) %>%
+  summarise(total = sum(ndx_d, na.rm = TRUE))
+
+p_31_16 <- with(hmd_2005, num1/ lx_all[Age == 16])
+cat(sprintf("p_31_16 = %.4f", p_31_16))
+```
+
+
+## D. If the experience of accidents and the probability of dying are process-dependent, is your estimate for C an overestimate or an underestimate of the true probability?
+
+The estimate for C could be either an overestimate or underestimate, depending on how the experience of accidents interacts with the experience of death. If being in an accident makes you more likely to die, because you are more risk-prone, then this would be an overestimate -- more high risk people experience accidents before dying, crowding out deaths that would otherwise occur first. If it makes you more risk-averse, this would be an underestimate, for the opposite reason. 
+
+## E. Extra Credit: Push your code to GitHub and share the link with someone from class. Answer here the name of the person(s) to whom you shared the link. 
+
+Leila Moustafa!
+
